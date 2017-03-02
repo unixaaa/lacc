@@ -1,6 +1,7 @@
 #include "typetree.h"
 #include <lacc/array.h>
 #include <lacc/context.h>
+#include <lacc/symbol.h>
 
 #include <assert.h>
 #include <limits.h>
@@ -37,6 +38,13 @@ struct typetree {
 
     /* Total storage size in bytes, returned for sizeof. */
     size_t size;
+
+    /*
+     * Symbol holding size of variable length array. Size is zero if
+     * set, and size_of still returns 0. Type of variable is always
+     * size_t, or unsigned long.
+     */
+    const struct symbol *vlen;
 
     /* Function parameters, or struct/union members. */
     array_of(struct member) members;
@@ -252,6 +260,7 @@ static size_t adjust_member_alignment(Type parent, Type type)
 Type type_create(enum type tt, ...)
 {
     Type type = {0}, next;
+    const struct symbol *sym;
     struct typetree *t;
     size_t elem;
     va_list args;
@@ -276,6 +285,7 @@ Type type_create(enum type tt, ...)
     case T_ARRAY:
         next = va_arg(args, Type);
         elem = va_arg(args, size_t);
+        sym = va_arg(args, const struct symbol *);
         if (elem > LONG_MAX / size_of(next)) {
             error("Array is too large (%lu elements).", elem);
             exit(1);
@@ -284,6 +294,10 @@ Type type_create(enum type tt, ...)
         t = get_typetree_handle(type.ref);
         t->size = elem * size_of(next);
         t->next = next;
+        if (sym) {
+            assert(!elem);
+            t->vlen = sym;
+        }
         break;
     case T_FUNCTION:
         next = va_arg(args, Type);
@@ -848,7 +862,9 @@ static int print_type(FILE *stream, Type type, int depth)
         break;
     case T_ARRAY:
         t = get_typetree_handle(type.ref);
-        if (t->size) {
+        if (t->vlen) {
+            n += fprintf(stream, "[%s] ", sym_name(t->vlen));
+        } else if (t->size) {
             n += fprintf(stream, "[%lu] ", t->size / size_of(t->next));
         } else {
             n += fputs("[] ", stream);

@@ -11,7 +11,7 @@
  *
  * Valid invocations are:
  *
- *   type_create(T_ARRAY, <Type elem>, <size_t length>)
+ *   type_create(T_ARRAY, <Type elem>, <size_t length>, <vla length>)
  *   type_create(T_POINTER, <Type next>)
  *   type_create(T_FUNCTION, <Type return>)
  *   type_create(T_STRUCT)

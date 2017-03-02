@@ -78,7 +78,7 @@ static struct block *parse__builtin_va_arg(
     consume(',');
     type = declaration_specifiers(NULL, NULL);
     if (peek().token != ')') {
-        type = declarator(type, NULL);
+        type = declarator(def, block, type, NULL);
     }
 
     consume(')');
@@ -126,7 +126,8 @@ static struct block *primary_expression(
             type_create(
                 T_ARRAY,
                 basic_type__char,
-                (size_t) tok.d.string.len + 1),
+                (size_t) tok.d.string.len + 1,
+                NULL),
             SYM_STRING_VALUE,
             LINK_INTERN);
         /*
@@ -470,7 +471,7 @@ static struct block *unary_expression(
                 consume('(');
                 type = declaration_specifiers(NULL, NULL);
                 if (peek().token != ')') {
-                    type = declarator(type, NULL);
+                    type = declarator(def, block, type, NULL);
                 }
                 consume(')');
                 break;
@@ -495,7 +496,7 @@ exprsize:   head = cfg_block_init(def);
         consume('(');
         type = declaration_specifiers(NULL, NULL);
         if (peek().token != ')') {
-            type = declarator(type, NULL);
+            type = declarator(def, block, type, NULL);
         }
         if (is_function(type)) {
             error("Cannot apply '_Alignof' to function type.");
@@ -553,7 +554,7 @@ static struct block *cast_expression(
             consume('(');
             type = declaration_specifiers(NULL, NULL);
             if (peek().token != ')') {
-                type = declarator(type, NULL);
+                type = declarator(def, block, type, NULL);
             }
             consume(')');
             block = cast_expression(def, block);

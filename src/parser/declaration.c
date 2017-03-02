@@ -52,7 +52,7 @@ static Type parameter_list(Type base)
     while (peek().token != ')') {
         name.len = 0;
         type = declaration_specifiers(NULL, NULL);
-        type = declarator(type, &name);
+        type = declarator(NULL, NULL, type, &name); /* TODO! VLA!! */
         if (is_void(type)) {
             if (nmembers(func)) {
                 error("Incomplete type in parameter list.");
@@ -105,6 +105,43 @@ static Type identifier_list(Type base)
     return type;
 }
 
+static struct var array_length_expression(
+    struct definition *def,
+    struct block *block)
+{
+    struct var val;
+    struct block *parent;
+
+    if (!block) {
+        val = constant_expression();
+    } else {
+        parent = block;
+        block = assignment_expression(def, block);
+        if (parent != block) {
+            error("Not supported! Complicated array size expression.");
+            exit(1);
+        }
+        val = eval(def, block, block->expr);
+    }
+
+    if (val.kind == IMMEDIATE) {
+        if (!is_integer(val.type)
+            || (is_signed(val.type) && val.imm.i < 1)
+            || (is_unsigned(val.type) && val.imm.u < 1))
+        {
+            error("Array dimension must be a natural number.");
+            exit(1);
+        }
+    }
+
+    if (!is_unsigned(val.type)) {
+        val = eval(def, block,
+            eval_expr(def, block, IR_OP_CAST, val, basic_type__unsigned_long));
+    }
+
+    return val;
+}
+
 /*
  * Parse array declarations of the form [s0][s1]..[sn], resulting in
  * type [s0] [s1] .. [sn] (base).
@@ -112,33 +149,41 @@ static Type identifier_list(Type base)
  * Only the first dimension s0 can be unspecified, yielding an
  * incomplete type. Incomplete types are represented by having size of
  * zero.
+ *
+ * VLA require evaluating an expression, and storing it in a separate
+ * stack allocated variable.
  */
-static Type direct_declarator_array(Type base)
+static Type direct_declarator_array(
+    struct definition *def,
+    struct block *block,
+    Type base)
 {
     size_t length;
     struct var val;
+    const struct symbol *sym;
 
     if (peek().token == '[') {
         next();
+        length = 0;
+        sym = NULL;
         if (peek().token != ']') {
-            val = constant_expression();
-            assert(val.kind == IMMEDIATE);
-            if (!is_integer(val.type)
-                || (is_signed(val.type) && val.imm.i < 1)) {
-                error("Array dimension must be a natural number.");
-                exit(1);
+            val = array_length_expression(def, block);
+            assert(type_equal(val.type, basic_type__unsigned_long));
+            if (val.kind == IMMEDIATE) {
+                length = val.imm.u;
+            } else {
+                assert(val.kind == DIRECT);
+                assert(val.symbol);
+                sym = val.symbol;
             }
-            length = is_signed(val.type) ? (size_t) val.imm.i : val.imm.u;
-        } else {
-            length = 0;
         }
         consume(']');
-        base = direct_declarator_array(base);
+        base = direct_declarator_array(def, block, base);
         if (!size_of(base)) {
             error("Array has incomplete element type.");
             exit(1);
         }
-        base = type_create(T_ARRAY, base, length);
+        base = type_create(T_ARRAY, base, length, sym);
     }
 
     return base;
@@ -155,7 +200,11 @@ static Type direct_declarator_array(Type base)
  * making it `* (int) -> void`. Void is used as a sentinel, the inner
  * declarator can only produce pointer, function or array.
  */
-static Type direct_declarator(Type base, String *name)
+static Type direct_declarator(
+    struct definition *def,
+    struct block *block,
+    Type base,
+    String *name)
 {
     struct token t;
     Type type, head = basic_type__void;
@@ -171,7 +220,7 @@ static Type direct_declarator(Type base, String *name)
         break;
     case '(':
         next();
-        head = declarator(head, name);
+        head = declarator(def, block, head, name);
         consume(')');
         break;
     default:
@@ -180,7 +229,7 @@ static Type direct_declarator(Type base, String *name)
 
     switch (peek().token) {
     case '[':
-        type = direct_declarator_array(base);
+        type = direct_declarator_array(def, block, base);
         break;
     case '(':
         next();
@@ -222,13 +271,17 @@ static Type pointer(Type type)
     }
 }
 
-Type declarator(Type base, String *name)
+Type declarator(
+    struct definition *def,
+    struct block *block,
+    Type base,
+    String *name)
 {
     while (peek().token == '*') {
         base = pointer(base);
     }
 
-    return direct_declarator(base, name);
+    return direct_declarator(def, block, base, name);
 }
 
 static void member_declaration_list(Type type)
@@ -241,7 +294,7 @@ static void member_declaration_list(Type type)
         decl_base = declaration_specifiers(NULL, NULL);
         do {
             name.len = 0;
-            decl_type = declarator(decl_base, &name);
+            decl_type = declarator(NULL, NULL, decl_base, &name);
             if (is_struct_or_union(type) && peek().token == ':') {
                 if (!is_int(decl_type)) {
                     error("Unsupported type '%t' for bit-field.", decl_type);
@@ -567,8 +620,8 @@ static void zero_initialize(
     case T_UNION:
         assert(size);
         target.type = (size % 8)
-            ? type_create(T_ARRAY, basic_type__char, size)
-            : type_create(T_ARRAY, basic_type__long, size / 8);
+            ? type_create(T_ARRAY, basic_type__char, size, NULL)
+            : type_create(T_ARRAY, basic_type__long, size / 8, NULL);
     case T_ARRAY:
         var = target;
         target.type = type_next(target.type);
@@ -973,7 +1026,7 @@ static void define_builtin__func__(String name)
      * Just add the symbol directly as a special string value. No
      * explicit assignment reflected in the IR.
      */
-    type = type_create(T_ARRAY, basic_type__char, (size_t) name.len + 1);
+    type = type_create(T_ARRAY, basic_type__char, (size_t) name.len + 1, NULL);
     sym = sym_add(
         &ns_ident,
         str_init("__func__"),
@@ -1067,7 +1120,7 @@ struct block *declaration(struct definition *def, struct block *parent)
 
     while (1) {
         name.len = 0;
-        type = declarator(base, &name);
+        type = declarator(def, parent, base, &name);
         if (!name.len) {
             consume(';');
             return parent;
