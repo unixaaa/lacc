@@ -1643,6 +1643,27 @@ static struct block *eval_logical_expression(
     return r;
 }
 
+struct expression eval_vla_size(
+    struct definition *def,
+    struct block *block,
+    Type type)
+{
+    const struct symbol *len;
+    struct var size;
+    Type base;
+
+    assert(is_vla(type));
+    len = type_vla_length(type);
+    base = type_next(type);
+    if (is_vla(base)) {
+        size = eval(def, block, eval_vla_size(def, block, base));
+    } else {
+        size = imm_unsigned(basic_type__unsigned_long, size_of(base));
+    }
+
+    return eval_expr(def, block, IR_OP_MUL, var_direct(len), size);
+}
+
 static int is_logical_immediate(
     struct block *left,
     struct block *top,

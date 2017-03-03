@@ -179,7 +179,7 @@ static Type direct_declarator_array(
         }
         consume(']');
         base = direct_declarator_array(def, block, base);
-        if (!size_of(base)) {
+        if (!size_of(base) && !is_vla(base)) {
             error("Array has incomplete element type.");
             exit(1);
         }
@@ -1079,6 +1079,42 @@ static void parameter_declaration_list(struct definition *def, Type type)
 }
 
 /*
+ * Emit code to calculate position of declared variable length array.
+ *
+ */
+static struct block *declare_vla(
+    struct definition *def,
+    struct block *block,
+    struct symbol *sym)
+{
+    struct var offset;
+    assert(is_vla(sym->type));
+
+    sym->vla_stack_offset = sym_create_temporary(basic_type__unsigned_long);
+    if (!def->vla_stack_offset) {
+        def->vla_stack_offset = sym_create_temporary(basic_type__unsigned_long);
+        offset = var_direct(def->vla_stack_offset);
+        offset.lvalue = 1;
+        eval_assign(def, block, offset, as_expr(var__immediate_zero));
+    }
+
+    /* Assign current offset to new VLA. */
+    offset = var_direct(sym->vla_stack_offset);
+    offset.lvalue = 1;
+    eval_assign(def, block, offset, as_expr(var_direct(def->vla_stack_offset)));
+
+    /* Increment global offset with new size. */
+    offset = var_direct(def->vla_stack_offset);
+    offset.lvalue = 1;
+    block->expr = eval_vla_size(def, block, sym->type);
+    eval_assign(def, block, offset,
+        eval_expr(def, block, IR_OP_ADD, offset,
+            eval(def, block, block->expr)));
+
+    return block;
+}
+
+/*
  * Cover external declarations, functions, and local declarations
  * (with optional initialization code) inside functions.
  */
@@ -1147,6 +1183,10 @@ struct block *declaration(struct definition *def, struct block *parent)
             break;
         }
 
+        if (is_vla(type)) {
+            parent = declare_vla(def, parent, sym);
+        }
+
         switch ((t = peek()).token) {
         case ';':
             consume(';');
@@ -1159,6 +1199,10 @@ struct block *declaration(struct definition *def, struct block *parent)
             }
             if (!sym->depth && sym->symtype == SYM_DEFINITION) {
                 error("Symbol '%s' was already defined.", str_raw(sym->name));
+                exit(1);
+            }
+            if (is_vla(sym->type)) {
+                error("Variable length array cannot be initialized.");
                 exit(1);
             }
             consume('=');

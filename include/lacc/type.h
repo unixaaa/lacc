@@ -126,6 +126,12 @@ Type type_next(Type type);
 int is_vararg(Type type);
 
 /*
+ * Determine whether type is a variable length array, with size only
+ * available at runtime.
+ */
+int is_vla(Type type);
+
+/*
  * Determine whether struct or union type contains a flexible array
  * member.
  */

@@ -286,7 +286,7 @@ Type type_create(enum type tt, ...)
         next = va_arg(args, Type);
         elem = va_arg(args, size_t);
         sym = va_arg(args, const struct symbol *);
-        if (elem > LONG_MAX / size_of(next)) {
+        if (elem * size_of(next) > LONG_MAX) {
             error("Array is too large (%lu elements).", elem);
             exit(1);
         }
@@ -295,8 +295,9 @@ Type type_create(enum type tt, ...)
         t->size = elem * size_of(next);
         t->next = next;
         if (sym) {
-            assert(!elem);
             t->vlen = sym;
+            assert(!size_of(type));
+            assert(is_vla(type));
         }
         break;
     case T_FUNCTION:
@@ -607,6 +608,18 @@ int is_vararg(Type type)
     return t->is_vararg;
 }
 
+int is_vla(Type type)
+{
+    struct typetree *t;
+
+    if (is_array(type)) {
+        t = get_typetree_handle(type.ref);
+        return t->vlen != NULL;
+    }
+
+    return 0;
+}
+
 int is_flexible(Type type)
 {
     struct typetree *t;
@@ -747,6 +760,15 @@ size_t size_of(Type type)
     default:
         return 0;
     }
+}
+
+const struct symbol *type_vla_length(Type type)
+{
+    struct typetree *t;
+    assert(is_vla(type));
+
+    t = get_typetree_handle(type.ref);
+    return t->vlen;
 }
 
 Type type_deref(Type type)

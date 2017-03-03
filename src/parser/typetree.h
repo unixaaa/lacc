@@ -90,6 +90,9 @@ void type_set_tag(Type type, String tag);
  */
 const struct member *find_type_member(Type type, String name);
 
+/* Get symbol holding number of elements in given VLA type. */
+const struct symbol *type_vla_length(Type type);
+
 /* */
 int is_compatible(Type l, Type r);
 

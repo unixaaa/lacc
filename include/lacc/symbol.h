@@ -70,6 +70,12 @@ struct symbol {
      */
     int stack_offset;
 
+    /*
+     * Stack offset of variable length arrays must be determined at run-
+     * time, and accesses into it are calculated based on this value.
+     */
+    const struct symbol *vla_stack_offset;
+
     /* Scope depth. */
     int depth;
 
