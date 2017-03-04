@@ -285,6 +285,9 @@ static void emit_ir(struct block *block, enum sttype st, ...)
         case IR_VA_START:
             stmt.expr = va_arg(args, struct expression);
             break;
+        case IR_VLA_ALLOC:
+            stmt.t = va_arg(args, struct var);
+            break;
         }
 
         array_push_back(&block->code, stmt);
@@ -1641,6 +1644,11 @@ static struct block *eval_logical_expression(
     f->jump[0] = r;
     r->expr = as_expr(res);
     return r;
+}
+
+void eval_vla_alloc(struct block *block, const struct symbol *sym)
+{
+    emit_ir(block, IR_VLA_ALLOC, var_direct(sym));
 }
 
 struct expression eval_vla_size(

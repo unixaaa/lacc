@@ -1111,6 +1111,7 @@ static struct block *declare_vla(
         eval_expr(def, block, IR_OP_ADD, offset,
             eval(def, block, block->expr)));
 
+    eval_vla_alloc(block, sym);
     return block;
 }
 

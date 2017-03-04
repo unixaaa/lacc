@@ -100,6 +100,8 @@ struct expression eval_return(
     struct definition *def,
     struct block *block);
 
+void eval_vla_alloc(struct block *block, const struct symbol *sym);
+
 /* Evaluate size of variable length array. */
 struct expression eval_vla_size(
     struct definition *def,

@@ -1407,6 +1407,23 @@ static int enter(struct definition *def)
     }
 
     /*
+     * After normal local variables, allocate space for VLA. This is
+     * also keeping alignment to 16 byte. 
+    */
+    /*if (def->vla_stack_offset) {
+        printf("Emitting VLA code\n");
+        ref = var_direct(def->vla_stack_offset);
+        ax = load_cast(ref, basic_type__unsigned_long);
+        cx = get_int_reg();
+        emit(INSTR_ADD, OPT_IMM_REG, constant(15, 8), reg(ax, 8));
+        emit(INSTR_MOVSX, OPT_IMM_REG, constant(-16, 4), reg(cx, 8));
+        emit(INSTR_AND, OPT_REG_REG, reg(cx, 8), reg(ax, 8));
+        store(ax, ref);
+        emit(INSTR_SUB, OPT_REG_REG, reg(ax, 8), reg(SP, 8));
+        relase_regs();
+    }*/
+
+    /*
      * Store all potential parameters to register save area. This
      * includes parameters that are known to be passed as registers,
      * that will anyway be stored to another stack location. It is
@@ -2550,6 +2567,33 @@ static enum reg compile_expression(struct expression expr)
     return compile_assign(target, expr);
 }
 
+/*
+ * Here we store current value of %rsp to sym->vla_stack_offset.
+ *
+ * Subtract rounded up size of sym->type from %rsp.
+ *
+ * On exit, read %rsp value from some variable before starting pop.
+ */
+static void compile_vla_alloc(const struct symbol *sym)
+{
+    enum reg ax, cx;
+    struct var ref;
+    struct definition *def;
+    assert(is_vla(sym->type));
+
+    def = definition; /* get global. */
+    printf("Emitting VLA code\n");
+    ref = var_direct(def->vla_stack_offset);
+    ax = load_cast(ref, basic_type__unsigned_long);
+    cx = get_int_reg();
+    emit(INSTR_ADD, OPT_IMM_REG, constant(15, 8), reg(ax, 8));
+    emit(INSTR_MOVSX, OPT_IMM_REG, constant(-16, 4), reg(cx, 8));
+    emit(INSTR_AND, OPT_REG_REG, reg(cx, 8), reg(ax, 8));
+    store(ax, ref);
+    emit(INSTR_SUB, OPT_REG_REG, reg(ax, 8), reg(SP, 8));
+    relase_regs();
+}
+
 static void compile_statement(struct statement stmt)
 {
     switch (stmt.st) {
@@ -2565,6 +2609,11 @@ static void compile_statement(struct statement stmt)
         stmt.t.type = basic_type__void;
     case IR_ASSIGN:
         compile_assign(stmt.t, stmt.expr);
+        break;
+    case IR_VLA_ALLOC:
+        assert(stmt.t.kind == DIRECT);
+        assert(stmt.t.symbol);
+        compile_vla_alloc(stmt.t.symbol);
         break;
     }
 
