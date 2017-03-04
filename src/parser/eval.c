@@ -555,11 +555,25 @@ static struct expression add(
             expr = create_expr(IR_OP_ADD, l, r);
         }
     } else if (is_pointer(l.type) && is_integer(r.type)) {
-        size = size_of(type_deref(l.type));
+        type = type_deref(l.type);
+        if (is_vla(type)) {
+            expr = eval_vla_size(def, block, type);
+            r = eval_cast(def, block, r, basic_type__long);
+            expr = eval_expr(def, block, IR_OP_MUL, eval(def, block, expr), r);
+            r = eval(def, block, expr);
+            type = l.type;
+            l.type = basic_type__long;
+            expr = create_expr(IR_OP_ADD, l, r);
+            expr.type = type;
+            return expr;
+        }
+
+        size = size_of(type);
         if (!size) {
             error("Pointer arithmetic on incomplete type.");
             exit(1);
         }
+
         /*
          * Special case for immediate string literal + constant, and
          * ADDRESS + constant. These can be evaluated immediately. If r
@@ -1043,8 +1057,14 @@ static struct var rvalue(
         var = eval_addr(def, block, var);
     } else if (is_array(var.type)) {
         if (is_vla(var.type)) {
-            assert(var.kind == DIRECT);
-            var = var_direct(var.symbol->vla_address);
+            if (var.kind == DIRECT) {
+                var = var_direct(var.symbol->vla_address);
+            } else {
+                assert(var.kind == DEREF);
+                assert(!var.offset);
+                var.kind = DIRECT;
+                var.type = type_create(T_POINTER, type_next(var.type));
+            }
         } else if (var.kind == IMMEDIATE) {
             assert(var.symbol);
             assert(var.symbol->symtype == SYM_STRING_VALUE);
