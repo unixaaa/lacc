@@ -181,12 +181,6 @@ static int displacement_from_offset(size_t offset)
     return (int) offset;
 }
 
-static int is_temporary(const struct symbol *sym)
-{
-    const char *str = str_raw(sym->name);
-    return str[0] == '.' && str[1] == 't';
-}
-
 static int is_register_allocated(struct var v)
 {
     return v.kind == DIRECT

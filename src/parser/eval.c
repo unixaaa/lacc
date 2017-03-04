@@ -1690,6 +1690,7 @@ struct expression eval_vla_size(
     Type type)
 {
     const struct symbol *len;
+    struct expression expr;
     struct var size;
     Type base;
 
@@ -1698,11 +1699,16 @@ struct expression eval_vla_size(
     base = type_next(type);
     if (is_vla(base)) {
         size = eval(def, block, eval_vla_size(def, block, base));
-    } else {
+        expr = eval_expr(def, block, IR_OP_MUL, var_direct(len), size);
+    } else if (size_of(base) > 1) {
         size = imm_unsigned(basic_type__unsigned_long, size_of(base));
+        expr = eval_expr(def, block, IR_OP_MUL, var_direct(len), size);
+    } else {
+        assert(size_of(base) == 1);
+        expr = as_expr(var_direct(len));
     }
 
-    return eval_expr(def, block, IR_OP_MUL, var_direct(len), size);
+    return expr;
 }
 
 static int is_logical_immediate(

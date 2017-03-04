@@ -43,7 +43,10 @@ static Type get_type_placeholder(void)
  * though K&R require at least specifier: (void)
  * Set parameter-type-list = parameter-list, including the , ...
  */
-static Type parameter_list(Type base)
+static Type parameter_list(
+    struct definition *def,
+    struct block *block,
+    Type base)
 {
     String name;
     Type func, type;
@@ -52,7 +55,7 @@ static Type parameter_list(Type base)
     while (peek().token != ')') {
         name.len = 0;
         type = declaration_specifiers(NULL, NULL);
-        type = declarator(NULL, NULL, type, &name); /* TODO! VLA!! */
+        type = declarator(def, block, type, &name);
         if (is_void(type)) {
             if (nmembers(func)) {
                 error("Incomplete type in parameter list.");
@@ -105,6 +108,13 @@ static Type identifier_list(Type base)
     return type;
 }
 
+/*
+ * Parse expression determining length of array.
+ *
+ * Variable length arrays must be ensured to evaluate to a new temporary
+ * only associated with this type, such that sizeof always returns the
+ * correct value.
+ */
 static struct var array_length_expression(
     struct definition *def,
     struct block *block)
@@ -112,31 +122,30 @@ static struct var array_length_expression(
     struct var val;
     struct block *parent;
 
-    if (!block) {
+    if (!current_scope_depth(&ns_ident) && !current_scope_depth(&ns_proto)) {
+        printf("No scope!\n");
         val = constant_expression();
     } else {
         parent = block;
         block = assignment_expression(def, block);
-        if (parent != block) {
-            error("Not supported! Complicated array size expression.");
-            exit(1);
-        }
+        assert(parent == block); /* todo: Branching expressions. */
         val = eval(def, block, block->expr);
     }
 
-    if (val.kind == IMMEDIATE) {
-        if (!is_integer(val.type)
+    if (val.kind == IMMEDIATE
+        && (!is_integer(val.type)
             || (is_signed(val.type) && val.imm.i < 1)
-            || (is_unsigned(val.type) && val.imm.u < 1))
-        {
-            error("Array dimension must be a natural number.");
-            exit(1);
-        }
+            || (is_unsigned(val.type) && val.imm.u < 1)))
+    {
+        error("Array dimension must be a natural number.");
+        exit(1);
     }
 
     if (!is_unsigned(val.type)) {
         val = eval(def, block,
             eval_expr(def, block, IR_OP_CAST, val, basic_type__unsigned_long));
+    } else if (val.kind == DIRECT && !is_temporary(val.symbol)) {
+        val = eval_copy(def, block, val);
     }
 
     return val;
