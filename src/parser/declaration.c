@@ -1087,31 +1087,13 @@ static struct block *declare_vla(
     struct block *block,
     struct symbol *sym)
 {
-    struct var offset;
+    struct symbol *offset;
     assert(is_vla(sym->type));
 
-    sym->vla_stack_offset = sym_create_temporary(basic_type__unsigned_long);
-    if (!def->vla_stack_offset) {
-        def->vla_stack_offset = sym_create_temporary(basic_type__unsigned_long);
-        offset = var_direct(def->vla_stack_offset);
-        offset.lvalue = 1;
-        eval_assign(def, block, offset, as_expr(var__immediate_zero));
-    }
-
-    /* Assign current offset to new VLA. */
-    offset = var_direct(sym->vla_stack_offset);
-    offset.lvalue = 1;
-    eval_assign(def, block, offset, as_expr(var_direct(def->vla_stack_offset)));
-
-    /* Increment global offset with new size. */
-    offset = var_direct(def->vla_stack_offset);
-    offset.lvalue = 1;
-    block->expr = eval_vla_size(def, block, sym->type);
-    eval_assign(def, block, offset,
-        eval_expr(def, block, IR_OP_ADD, offset,
-            eval(def, block, block->expr)));
-
-    eval_vla_alloc(block, sym);
+    offset = sym_create_temporary(basic_type__unsigned_long);
+    array_push_back(&def->locals, offset);
+    sym->vla_stack_offset = offset;
+    eval_vla_alloc(def, block, sym);
     return block;
 }
 

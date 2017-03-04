@@ -1238,7 +1238,7 @@ static int allocate_locals(
     for (i = 0; i < array_len(&def->locals); ++i) {
         sym = array_get(&def->locals, i);
         assert(!sym->stack_offset);
-        if (sym->linkage == LINK_NONE && sym->slot == 0) {
+        if (sym->linkage == LINK_NONE && sym->slot == 0 && !is_vla(sym->type)) {
             stack_offset -= EIGHTBYTES(sym->type) * 8;
             sym->stack_offset = stack_offset - reg_offset;
         }
@@ -1293,7 +1293,7 @@ static int return_address_offset;
  * Emit code for entering a function.
  *
  * Return number of bytes subtracted from %rsp allocated for local
- * variables.
+ * variables, covering areas 2--5 in the below illustration.
  *
  * The stack frame contains, in order:
  *
@@ -1305,6 +1305,7 @@ static int return_address_offset;
  *     could have been passed in registers.
  *  4) Parameters passed in registers.
  *  5) Local variables.
+ *  6) Variable length arrays (not allocated here).
  *
  */
 static int enter(struct definition *def)
@@ -1315,7 +1316,7 @@ static int enter(struct definition *def)
         next_sse_reg = 0,
         mem_offset = 16,    /* Offset of PC_MEMORY parameters. */
         reg_offset = 0,     /* Offset of %rsp to save temp registers. */
-        stack_offset = 0;   /* Offset of %rsp to for local variables. */
+        stack_offset = 0;   /* Offset of %rsp for local variables. */
     struct var ref;
     struct symbol *sym;
     struct param_class res, arg;
@@ -2574,24 +2575,30 @@ static enum reg compile_expression(struct expression expr)
  *
  * On exit, read %rsp value from some variable before starting pop.
  */
-static void compile_vla_alloc(const struct symbol *sym)
+static void compile_vla_alloc(
+    const struct symbol *sym,
+    struct expression size)
 {
-    enum reg ax, cx;
-    struct var ref;
-    struct definition *def;
+    enum reg ax;
+    struct var offset;
     assert(is_vla(sym->type));
 
-    def = definition; /* get global. */
-    printf("Emitting VLA code\n");
-    ref = var_direct(def->vla_stack_offset);
-    ax = load_cast(ref, basic_type__unsigned_long);
-    cx = get_int_reg();
+    /* Assign stack location to VLA. */
+    offset = var_direct(sym->vla_stack_offset);
+    store(SP, offset);
+
+    /* Subtract aligned variable length from %rsp. */
+    ax = compile_expression(size);
+    emit(INSTR_SUB, OPT_REG_REG, reg(ax, 8), reg(SP, 8));
+    emit(INSTR_MOV, OPT_IMM_REG, constant(-16, 8), reg(R11, 8));
+    emit(INSTR_AND, OPT_REG_REG, reg(R11, 8), reg(SP, 8));
+
+
+    /*;
     emit(INSTR_ADD, OPT_IMM_REG, constant(15, 8), reg(ax, 8));
     emit(INSTR_MOVSX, OPT_IMM_REG, constant(-16, 4), reg(cx, 8));
     emit(INSTR_AND, OPT_REG_REG, reg(cx, 8), reg(ax, 8));
-    store(ax, ref);
-    emit(INSTR_SUB, OPT_REG_REG, reg(ax, 8), reg(SP, 8));
-    relase_regs();
+    emit(INSTR_SUB, OPT_REG_REG, reg(ax, 8), reg(SP, 8));*/
 }
 
 static void compile_statement(struct statement stmt)
@@ -2613,7 +2620,7 @@ static void compile_statement(struct statement stmt)
     case IR_VLA_ALLOC:
         assert(stmt.t.kind == DIRECT);
         assert(stmt.t.symbol);
-        compile_vla_alloc(stmt.t.symbol);
+        compile_vla_alloc(stmt.t.symbol, stmt.expr);
         break;
     }
 
@@ -2733,8 +2740,14 @@ static void compile_block(struct block *block, Type type, int stack)
             assert(x87_stack == 0);
         }
         if (temp_int_regs_used) {
-            if (stack)
-                emit(INSTR_ADD, OPT_IMM_REG, constant(stack, 8), reg(SP, 8));
+            /* Only needed if we have local variables or VLA. */
+            emit(INSTR_LEA, OPT_MEM_REG,
+                location(address(-temp_int_regs_used * 8, BP, 0, 0), 8),
+                reg(SP, 8));
+            /* todo: Actually dont need stack variable at all. Can
+             * replace with temp_int_regs. */
+            /*if (stack)
+                emit(INSTR_ADD, OPT_IMM_REG, constant(stack, 8), reg(SP, 8));*/
             for (i = temp_int_regs_used; i > 0; --i)
                 emit(INSTR_POP, OPT_REG, reg(temp_int_reg[i - 1], 8));
         }

@@ -119,15 +119,16 @@ struct expression {
  * about memory layout only available to backend.
  *
  * Variable length arrays are allocated when declared, and deallocated
- * all at once when exiting function scope.
+ * all at once when exiting function scope. Expression holds the size
+ * in bytes to be allocated to VLA t.
  */
 struct statement {
     enum sttype {
-        IR_EXPR,      /* (expr)         */
-        IR_PARAM,     /* param (expr)   */
-        IR_VA_START,  /* va_start(expr) */
-        IR_ASSIGN,    /* t = expr       */
-        IR_VLA_ALLOC
+        IR_EXPR,      /* (expr)              */
+        IR_PARAM,     /* param (expr)        */
+        IR_VA_START,  /* va_start(expr)      */
+        IR_ASSIGN,    /* t = expr            */
+        IR_VLA_ALLOC  /* vla_alloc t, (expr) */
     } st;
     unsigned long out;
     struct var t;
@@ -220,7 +221,7 @@ struct definition {
      *
      * If a function contains no VLAs, this symbol is NULL.
      */
-    const struct symbol *vla_stack_offset;
+    /*const struct symbol *vla_stack_offset;*/
 
     /*
      * Function definitions are associated with a control flow graph,

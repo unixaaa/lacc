@@ -279,14 +279,12 @@ static void emit_ir(struct block *block, enum sttype st, ...)
         stmt.t = var_void();
         switch (st) {
         case IR_ASSIGN:
+        case IR_VLA_ALLOC:
             stmt.t = va_arg(args, struct var);
         case IR_EXPR:
         case IR_PARAM:
         case IR_VA_START:
             stmt.expr = va_arg(args, struct expression);
-            break;
-        case IR_VLA_ALLOC:
-            stmt.t = va_arg(args, struct var);
             break;
         }
 
@@ -1646,9 +1644,14 @@ static struct block *eval_logical_expression(
     return r;
 }
 
-void eval_vla_alloc(struct block *block, const struct symbol *sym)
+void eval_vla_alloc(
+    struct definition *def,
+    struct block *block,
+    const struct symbol *sym)
 {
-    emit_ir(block, IR_VLA_ALLOC, var_direct(sym));
+    assert(is_vla(sym->type));
+    block->expr = eval_vla_size(def, block, sym->type);
+    emit_ir(block, IR_VLA_ALLOC, var_direct(sym), block->expr);
 }
 
 struct expression eval_vla_size(

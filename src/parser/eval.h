@@ -100,7 +100,14 @@ struct expression eval_return(
     struct definition *def,
     struct block *block);
 
-void eval_vla_alloc(struct block *block, const struct symbol *sym);
+/*
+ * Allocate stack space for variable length array, with size in bytes
+ * determined by run-time evaluated expression.
+ */
+void eval_vla_alloc(
+    struct definition *def,
+    struct block *block,
+    const struct symbol *sym);
 
 /* Evaluate size of variable length array. */
 struct expression eval_vla_size(

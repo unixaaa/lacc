@@ -240,7 +240,9 @@ static void dot_print_node(struct block *node)
             dot_print_expr(s.expr);
             break;
         case IR_VLA_ALLOC:
-            fprintf(stream, " | __vla_alloc(%s)", vartostr(s.t));
+            fprintf(stream, " | vla_alloc %s, (", vartostr(s.t));
+            dot_print_expr(s.expr);
+            fputs(")", stream);
             break;
         }
     }
