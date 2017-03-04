@@ -2569,7 +2569,7 @@ static enum reg compile_expression(struct expression expr)
 }
 
 /*
- * Here we store current value of %rsp to sym->vla_stack_offset.
+ * Here we store current value of %rsp to sym->vla_address.
  *
  * Subtract rounded up size of sym->type from %rsp.
  *
@@ -2580,12 +2580,7 @@ static void compile_vla_alloc(
     struct expression size)
 {
     enum reg ax;
-    struct var offset;
     assert(is_vla(sym->type));
-
-    /* Assign stack location to VLA. */
-    offset = var_direct(sym->vla_stack_offset);
-    store(SP, offset);
 
     /* Subtract aligned variable length from %rsp. */
     ax = compile_expression(size);
@@ -2593,12 +2588,8 @@ static void compile_vla_alloc(
     emit(INSTR_MOV, OPT_IMM_REG, constant(-16, 8), reg(R11, 8));
     emit(INSTR_AND, OPT_REG_REG, reg(R11, 8), reg(SP, 8));
 
-
-    /*;
-    emit(INSTR_ADD, OPT_IMM_REG, constant(15, 8), reg(ax, 8));
-    emit(INSTR_MOVSX, OPT_IMM_REG, constant(-16, 4), reg(cx, 8));
-    emit(INSTR_AND, OPT_REG_REG, reg(cx, 8), reg(ax, 8));
-    emit(INSTR_SUB, OPT_REG_REG, reg(ax, 8), reg(SP, 8));*/
+    /* Assign current stack location to VLA symbol. */
+    store(SP, var_direct(sym->vla_address));
 }
 
 static void compile_statement(struct statement stmt)

@@ -1042,7 +1042,10 @@ static struct var rvalue(
     if (is_function(var.type)) {
         var = eval_addr(def, block, var);
     } else if (is_array(var.type)) {
-        if (var.kind == IMMEDIATE) {
+        if (is_vla(var.type)) {
+            assert(var.kind == DIRECT);
+            var = var_direct(var.symbol->vla_address);
+        } else if (var.kind == IMMEDIATE) {
             assert(var.symbol);
             assert(var.symbol->symtype == SYM_STRING_VALUE);
             /*
@@ -1155,6 +1158,13 @@ struct var eval_addr(
     if (is_field(var)) {
         error("Cannot take address of bit-field.");
         exit(1);
+    }
+
+    if (is_vla(var.type)) {
+        assert(var.kind == DIRECT);
+        assert(var.symbol);
+        var = var_direct(var.symbol->vla_address);
+        return var;
     }
 
     switch (var.kind) {

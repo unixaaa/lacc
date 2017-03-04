@@ -1079,20 +1079,18 @@ static void parameter_declaration_list(struct definition *def, Type type)
 }
 
 /*
- * Emit code to calculate position of declared variable length array.
- *
  */
 static struct block *declare_vla(
     struct definition *def,
     struct block *block,
     struct symbol *sym)
 {
-    struct symbol *offset;
+    struct symbol *addr;
     assert(is_vla(sym->type));
 
-    offset = sym_create_temporary(basic_type__unsigned_long);
-    array_push_back(&def->locals, offset);
-    sym->vla_stack_offset = offset;
+    addr = sym_create_temporary(type_create(T_POINTER, type_next(sym->type)));
+    array_push_back(&def->locals, addr);
+    sym->vla_address = addr;
     eval_vla_alloc(def, block, sym);
     return block;
 }
