@@ -17,7 +17,8 @@ static array_of(struct symbol *) temporaries;
 struct namespace
     ns_ident = {"identifiers"},
     ns_label = {"labels"},
-    ns_tag = {"tags"};
+    ns_tag = {"tags"},
+    ns_proto = {"prototype"};
 
 const struct symbol *decl_memcpy = NULL;
 

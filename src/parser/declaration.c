@@ -63,6 +63,7 @@ static Type parameter_list(
             break;
         }
         type_add_member(func, name, type);
+        sym_add(&ns_proto, name, type, SYM_DEFINITION, LINK_NONE);
         if (peek().token != ',') {
             break;
         }
@@ -243,11 +244,13 @@ static Type direct_declarator(
     case '(':
         next();
         t = peek();
+        push_scope(&ns_proto);
         if (t.token == IDENTIFIER && !get_typedef(t.d.string)) {
             type = identifier_list(base);
         } else {
-            type = parameter_list(base);
+            type = parameter_list(def, block, base);
         }
+        pop_scope(&ns_proto);
         consume(')');
         break;
     default:
@@ -1156,6 +1159,7 @@ struct block *declaration(struct definition *def, struct block *parent)
             symtype = SYM_DECLARATION;
         }
 
+        printf("Adding symbol %s\n", str_raw(name));
         sym = sym_add(&ns_ident, name, type, symtype, linkage);
         switch (current_scope_depth(&ns_ident)) {
         case 0: break;

@@ -17,8 +17,11 @@ static const struct symbol *find_symbol(String name)
 {
     const struct symbol *sym = sym_lookup(&ns_ident, name);
     if (!sym) {
-        error("Undefined symbol '%s'.", str_raw(name));
-        exit(1);
+        sym = sym_lookup(&ns_proto, name);
+        if (!sym) {
+            error("Undefined symbol '%s'.", str_raw(name));
+            exit(1);
+        }
     }
 
     return sym;

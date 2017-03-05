@@ -50,7 +50,8 @@ struct namespace {
 extern struct namespace
     ns_ident,   /* Identifiers. */
     ns_label,   /* Labels. */
-    ns_tag;     /* Tags. */
+    ns_tag,     /* Tags. */
+    ns_proto;   /* Function prototype. */
 
 void push_scope(struct namespace *ns);
 void pop_scope(struct namespace *ns);
